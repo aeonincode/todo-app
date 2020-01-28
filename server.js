@@ -1,12 +1,13 @@
 let express = require('express')
 let mongodb = require('mongodb')
+let sanitizeHTML = require('sanitize-html')
 
 let app = express()
 let db
 
 app.use(express.static('public'))
 
-let connectionString = 'mongodb+srv://todoAppUser:******@cluster0-4r5dr.mongodb.net/TodoApp?retryWrites=true&w=majority'
+let connectionString = 'mongodb+srv://todoAppUser:*****@cluster0-4r5dr.mongodb.net/TodoApp?retryWrites=true&w=majority'
 mongodb.connect(connectionString, {useNewUrlParser: true}, function(err, client) {
   db = client.db()
   app.listen(3000)
@@ -14,6 +15,18 @@ mongodb.connect(connectionString, {useNewUrlParser: true}, function(err, client)
 
 app.use(express.json())
 app.use(express.urlencoded({extended: false}))
+
+function passwordProtected(req, res, next) {
+  res.set('WWW-Authenticate', 'Basic realm="Simple Todo App"')
+  console.log(req.headers.authorization)
+  if (req.headers.authorization == "Basic bGVhcm46amF2YXNjcmlwdA==") {
+    next()
+  } else {
+    res.status(401).send("Authentication required")
+  }
+}
+
+app.use(passwordProtected)
 
 app.get('/', function(req, res) {
     db.collection('items').find().toArray(function(err, items) {
@@ -55,13 +68,15 @@ app.get('/', function(req, res) {
 })
 
 app.post('/create-item', function(req, res) {
-    db.collection('items').insertOne({text: req.body.text}, function(err, info) {
+    let safeText = sanitizeHTML(req.body.text, {allowedTags: [], allowedAttributes: {}})
+    db.collection('items').insertOne({text: safeText}, function(err, info) {
       res.json(info.ops[0])
     })
 })
 
 app.post('/update-item', function(req, res) {
-  db.collection('items').findOneAndUpdate({_id: new mongodb.ObjectId(req.body.id)}, {$set: {text: req.body.text}}, function() {
+  let safeText = sanitizeHTML(req.body.text, {allowedTags: [], allowedAttributes: {}})
+  db.collection('items').findOneAndUpdate({_id: new mongodb.ObjectId(req.body.id)}, {$set: {text: safeText}}, function() {
     res.send("Success")
   })
 })
